@@ -6,6 +6,7 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 import streamlit as st
+from google import genai
 
 # Configuração da página
 st.set_page_config(
@@ -163,26 +164,86 @@ if st.button("Buscar Produtos", type="primary"):
     if dados_csv:
       st.success(f"Encontrados {len(dados_csv)} resultados!")
 
-      df = pd.DataFrame(dados_csv)
-      st.dataframe(df, use_container_width=True)
+      # Salvamos os dados no session_state do Streamlit para não perder ao clicar em botões internos
+      st.session_state["dados_csv"] = dados_csv
+    else:
+      st.session_state["dados_csv"] = []
+      st.error("Nenhum produto foi encontrado para os termos informados.")
 
-      # Preparação do arquivo para download no formato com ';' e vírgula decimal
-      df_export = df.copy()
-      for col in ["PrecoAtual", "PrecoPorUnidadePadrao", "PrecoAnterior"]:
-        df_export[col] = df_export[col].apply(
-            lambda x: str(x).replace(".", ",")
-            if isinstance(x, (int, float))
-            else x
+# --- Bloco de Exibição e Integração com o Gemini ---
+# Utiliza o st.session_state para manter os dados na tela após a busca
+if "dados_csv" in st.session_state and st.session_state["dados_csv"]:
+  dados_csv = st.session_state["dados_csv"]
+  df = pd.DataFrame(dados_csv)
+  
+  st.dataframe(df, use_container_width=True)
+
+  # Preparação do arquivo para download em CSV
+  df_export = df.copy()
+  for col in ["PrecoAtual", "PrecoPorUnidadePadrao", "PrecoAnterior"]:
+    df_export[col] = df_export[col].apply(
+        lambda x: str(x).replace(".", ",")
+        if isinstance(x, (int, float))
+        else x
+    )
+
+  csv_buffer = io.StringIO()
+  df_export.to_csv(csv_buffer, index=False, sep=";", encoding="utf-8-sig")
+
+  st.download_button(
+      label="📥 Baixar Resultado em CSV",
+      data=csv_buffer.getvalue(),
+      file_name="comparativo_supermercados.csv",
+      mime="text/csv",
+  )
+
+  # --- INTEGRAÇÃO COM O GEMINI ---
+  st.markdown("---")
+  st.subheader("🤖 Assistente de Compras Inteligente")
+  st.write(
+      "Clique abaixo para pedir que a IA analise os preços e monte a"
+      " melhor estratégia de divisão das compras entre os mercados."
+  )
+
+  if st.button("✨ Gerar Relatório de Melhores Opções", type="secondary"):
+    with st.spinner("A IA está analisando as melhores ofertas..."):
+      try:
+        dados_resumidos = df[
+            [
+                "Supermercado",
+                "TermoBusca",
+                "NomeProduto",
+                "PrecoAtual",
+                "PrecoPorUnidadePadrao",
+                "EmPromocao",
+            ]
+        ].to_string(index=False)
+
+        prompt = f"""
+                Atue como um consultor especialista em economia doméstica e compras de supermercado.
+                Abaixo está uma lista de produtos encontrados em diferentes supermercados (Bistek, Giassi, Angeloni) para os itens que o usuário deseja comprar.
+                
+                Analise os dados e monte a melhor estratégia de compra (cesta otimizada). 
+                Agrupe a resposta indicando exatamente em qual supermercado o usuário deve comprar cada item para obter o menor custo total possível. 
+                Se houver produtos com bom custo-benefício por unidade padrão (ex: preço por kg ou litro) ou em promoção, leve isso em consideração na recomendação.
+                
+                Dados coletados:
+                {dados_resumidos}
+                
+                Apresente o resultado de forma limpa, organizada por supermercado sugerido e com um resumo estimado do custo total.
+                """
+
+        # Inicializa o cliente do Gemini usando a chave salva nos secrets do Streamlit
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+        resposta = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
         )
 
-      csv_buffer = io.StringIO()
-      df_export.to_csv(csv_buffer, index=False, sep=";", encoding="utf-8-sig")
+        st.markdown("### 📋 Relatório de Compras Otimizado")
+        st.markdown(resposta.text)
 
-      st.download_button(
-          label="📥 Baixar Resultado em CSV",
-          data=csv_buffer.getvalue(),
-          file_name="comparativo_supermercados.csv",
-          mime="text/csv",
-      )
-    else:
-      st.error("Nenhum produto foi encontrado para os termos informados.")
+      except Exception as e:
+        st.error(
+            f"Não foi possível gerar o relatório. Atualize e tente novamente. Se o ero persistir, informe ao desenvolvedor. Erro: {e}"
+        )
