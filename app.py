@@ -237,7 +237,7 @@ if "dados_csv" in st.session_state and st.session_state["dados_csv"]:
 
         # Chamada ao modelo
         resposta = client.models.generate_content(
-            model="gemini-3.8-flash", contents=prompt
+            model="gemini-1.5-flash", contents=prompt
         )
 
         st.markdown("### 📋 Relatório de Compras Otimizado")
