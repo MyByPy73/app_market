@@ -247,7 +247,7 @@ if "dados_csv" in st.session_state and st.session_state["dados_csv"]:
         # Verifica se o erro é de servidores lotados (503)
         if "503" in str(e) or "UNAVAILABLE" in str(e):
           st.warning(
-              "⚠️ Os servidores do Gemini estão com alta demanda no momento."
+              "⚠️ Nossos servidores estão com alta demanda no momento."
               " Por favor, aguarde alguns segundos e clique no botão novamente."
           )
         else:
