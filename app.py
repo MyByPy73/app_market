@@ -233,9 +233,9 @@ if "dados_csv" in st.session_state and st.session_state["dados_csv"]:
                 Apresente o resultado de forma limpa, organizada por supermercado sugerido e com um resumo estimado do custo total.
                 """
 
-        # Inicializa o cliente do Gemini usando a chave salva nos secrets do Streamlit
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
+        # Chamada ao modelo
         resposta = client.models.generate_content(
             model="gemini-3.8-flash", contents=prompt
         )
@@ -244,6 +244,11 @@ if "dados_csv" in st.session_state and st.session_state["dados_csv"]:
         st.markdown(resposta.text)
 
       except Exception as e:
-        st.error(
-            f"Não foi possível gerar o relatório. Atualize e tente novamente. Se o ero persistir, informe ao desenvolvedor. Erro: {e}"
-        )
+        # Verifica se o erro é de servidores lotados (503)
+        if "503" in str(e) or "UNAVAILABLE" in str(e):
+          st.warning(
+              "⚠️ Os servidores do Gemini estão com alta demanda no momento."
+              " Por favor, aguarde alguns segundos e clique no botão novamente."
+          )
+        else:
+          st.error(f"Não foi possível gerar o relatório. Erro: {e}")
